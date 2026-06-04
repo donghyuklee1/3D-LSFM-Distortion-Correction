@@ -29,8 +29,8 @@ Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting
 ```
 configs/
   lsfm_beads.yaml           # Synthetic dataset parameters
-  train_vit_inr.yaml        # Proposed ViT+INR training (80 epochs)
-  paper_baselines.yaml      # 2D AE / 3D skip-AE baselines (50 epochs)
+  train_vit_inr.yaml        # Proposed ViT+INR training (12,000 epochs)
+  paper_baselines.yaml      # 2D AE / 3D skip-AE baselines (12,000 epochs)
   paper_comparison.yaml     # Evaluation table configuration
   smoke_lsfm_beads.yaml     # Fast local smoke test
 
@@ -84,7 +84,7 @@ python scripts/prepare_dataset.py \
 
 Each sample stores `stack_distorted`, `stack_corrected`, bead centers/radii, and distortion metadata.
 
-### 2. Train proposed model (80 epochs)
+### 2. Train proposed model (12,000 epochs)
 
 ```bash
 python train.py \
@@ -98,7 +98,7 @@ Monitor with TensorBoard:
 tensorboard --logdir runs/lsfm_beads/vit_multihead_inr
 ```
 
-Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch079.pt`.
+Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch11999.pt`.
 
 ### 3. Evaluate
 
@@ -106,7 +106,7 @@ Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch079.pt`.
 python scripts/evaluate_restoration.py \
   --cfg configs/train_vit_inr.yaml \
   --cache cached/lsfm_beads \
-  --checkpoint runs/lsfm_beads/vit_multihead_inr/ckpt_epoch079.pt \
+  --checkpoint runs/lsfm_beads/vit_multihead_inr/ckpt_epoch11999.pt \
   --methods vit_multihead_inr axial_factor \
   --out runs/lsfm_beads/eval
 ```
@@ -175,7 +175,7 @@ Representative qualitative figures in the report: MIP/slice restoration (`result
 | Samples | 1,024 | 1,024 |
 | Volume size | 64³ | 64³ |
 | Batch size | 2 | 4 |
-| **Epochs** | **80** | **50** |
+| **Epochs** | **12,000** | **12,000** |
 | Learning rate | 2×10⁻⁵ | 3×10⁻⁴ |
 | Distortion range | 1.8× – 10× | same |
 

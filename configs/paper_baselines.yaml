@@ -30,7 +30,7 @@ train:
   cache_dir: "cached/lsfm_beads"
   max_train_samples: 1024
   batch_size: 4
-  epochs: 50
+  epochs: 12000
   lr: 3.0e-4
   weight_decay: 1.0e-5
   num_workers: 0
