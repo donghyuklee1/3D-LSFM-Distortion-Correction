@@ -175,9 +175,9 @@ Additional regularizers: axial compactness, soft Dice, spherical bead prior, bac
 
 ---
 
-## Reported results (prior 1,024-volume short run)
+## Reported results (prior 4,096-volume short run)
 
-*Figures below are from an earlier 1,024-sample / short-epoch checkpoint. Re-generate the 8,192-sample cache, re-train, and re-evaluate with `ckpt_epoch01199.pt` for numbers aligned with the current config.*
+*Figures below are from an earlier 4,096-sample / short-epoch checkpoint. Re-generate the 8,192-sample cache, re-train, and re-evaluate with `ckpt_epoch01199.pt` for numbers aligned with the current config.*
 
 <img width="815" height="199" alt="image" src="https://github.com/user-attachments/assets/8bbef38f-6012-4111-8585-3d0bfeb694c1" />
 
@@ -186,8 +186,6 @@ Additional regularizers: axial compactness, soft Dice, spherical bead prior, bac
 <img width="602" height="374" alt="image" src="https://github.com/user-attachments/assets/714dc067-6220-4071-8235-3728226b0327" />
 
 The 3D skip AE achieves the highest pixel-level PSNR/SSIM but introduces geometric blur (high axial ratio error). The 2D AE cannot correct macroscopic $z$-elongation. **Our framework achieves the lowest axial ratio error** while maintaining competitive global restoration, recovering isotropic spherical bead morphology under severe ($8.3\times$) distortion.
-
-Representative qualitative figures in the report: MIP/slice restoration (`result1.png`), 3D isosurface render (`result2.png`), axial intensity profiles with FWHM compression 19→5 layers (`result3.png`), architecture diagram (`result4.png`).
 
 ---
 
