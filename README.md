@@ -126,20 +126,7 @@ Outputs: `runs/lsfm_beads/paper_comparison/summary.md` and `summary.tex`.
 
 ## Model architecture
 
-```
-Distorted volume (B, 1, Z, Y, X)
-        │
-        ▼
-  Axial ViT encoder  ──►  global latent z  ──►  z_aux , z_rho
-        │                                              │
-        ▼                                              ▼
-  Local 3D conv stem                          FiLM-conditioned INR
-  + grid sampling                             (Fourier φ(p) + f_local(p))
-        │                                              │
-        └──────────────────┬───────────────────────────┘
-                           ▼
-              Corrected density field ŷ(p) ∈ [0, 1]
-```
+<img width="1299" height="467" alt="image" src="https://github.com/user-attachments/assets/22cf9025-2a1e-4ddf-ae98-75bf4598610b" />
 
 **Supported model names** (`model.name` in config):
 
@@ -169,12 +156,11 @@ Additional regularizers: axial compactness, soft Dice, spherical bead prior, bac
 
 ## Reported results (1,024 test volumes)
 
-| Method | PSNR ↑ | SSIM ↑ | Axial ratio err. ↓ |
-|--------|--------|--------|---------------------|
-| Global axial resampling | 29.35 ± 0.89 | 0.1513 ± 0.0176 | 0.0915 ± 0.0398 |
-| 2D slice autoencoder | 34.63 ± 3.17 | 0.7870 ± 0.1019 | 1.5202 ± 0.8564 |
-| 3D skip autoencoder | **44.80 ± 3.14** | **0.9742 ± 0.0143** | 0.1205 ± 0.1063 |
-| **Ours (ViT+INR + physics prior)** | 39.11 ± 3.34 | 0.8185 ± 0.1335 | **0.0449 ± 0.0246** |
+<img width="815" height="199" alt="image" src="https://github.com/user-attachments/assets/8bbef38f-6012-4111-8585-3d0bfeb694c1" />
+
+<img width="1080" height="358" alt="image" src="https://github.com/user-attachments/assets/9d2c314d-10fb-44ee-8250-992326a97ab9" />
+
+<img width="602" height="374" alt="image" src="https://github.com/user-attachments/assets/714dc067-6220-4071-8235-3728226b0327" />
 
 The 3D skip AE achieves the highest pixel-level PSNR/SSIM but introduces geometric blur (high axial ratio error). The 2D AE cannot correct macroscopic $z$-elongation. **Our framework achieves the lowest axial ratio error** while maintaining competitive global restoration, recovering isotropic spherical bead morphology under severe ($8.3\times$) distortion.
 
