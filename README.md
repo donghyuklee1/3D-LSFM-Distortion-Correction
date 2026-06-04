@@ -239,4 +239,4 @@ python train.py --cfg configs/smoke_lsfm_beads.yaml \
 
 ## License
 
-Academic project for EE.49904 Computational Imaging, KAIST.
+Class project for EE.49904 Computational Imaging, KAIST.
