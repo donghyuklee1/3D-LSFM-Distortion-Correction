@@ -1,4 +1,4 @@
-## KAIST 26 Spring - EE.49904 Computational Imaging
+### 26S EE.49904 Computational Imaging
 # Implicit Neural Representations for 3D LSFM Distortion Correction via Axial Vision Transformers
 
 **Author: Donghyuk Lee (Adviser: Iksung Kang)**
