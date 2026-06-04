@@ -1,0 +1,51 @@
+dataset:
+  name: "lsfm_beads"
+
+bead_dataset:
+  Nz: 32
+  Ny: 32
+  Nx: 32
+  min_beads: 2
+  max_beads: 3
+  bead_radius_px: 1.8
+  radius_jitter: 0.2
+  margin_px: 5
+  distortion_min: 1.8
+  distortion_max: 6.0
+  spatially_varying_distortion: true
+  asymmetric_ri: true
+  asymmetric_ri_strength: 0.25
+  lateral_shear_px: 1.0
+  axial_shift_px: 1.5
+  light_sigma_y_frac: 0.45
+  light_sigma_z_frac: 0.80
+  blur_sigma_xy: 0.7
+  blur_sigma_z: 1.0
+  photons: 100.0
+  gaussian_noise_sigma: 0.02
+  background: 0.02
+
+train:
+  cache_dir: "cached/smoke_lsfm_beads"
+  batch_size: 2
+  epochs: 1
+  lr: 3.0e-4
+  weight_decay: 1.0e-5
+  num_workers: 0
+  seed: 0
+  foreground_gamma: 8.0
+  lambda_l1: 0.25
+  lambda_proj: 0.50
+
+model:
+  name: "skip_autoencoder_3d"
+  base_channels: 8
+
+eval:
+  batch_size: 1
+  max_samples: 4
+
+logging:
+  log_dir: "runs/smoke_lsfm_beads"
+  scalar_every: 1
+  image_every: 1

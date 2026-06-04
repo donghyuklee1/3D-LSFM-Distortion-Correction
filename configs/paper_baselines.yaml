@@ -1,0 +1,54 @@
+# Train neural baselines on the same 1024-sample cache as the ViT+INR model.
+dataset:
+  name: "lsfm_beads"
+
+bead_dataset:
+  Nz: 64
+  Ny: 64
+  Nx: 64
+  min_beads: 3
+  max_beads: 8
+  bead_radius_px: 2.0
+  radius_jitter: 0.25
+  margin_px: 8
+  distortion_min: 1.8
+  distortion_max: 10.0
+  spatially_varying_distortion: true
+  asymmetric_ri: true
+  asymmetric_ri_strength: 0.30
+  lateral_shear_px: 2.0
+  axial_shift_px: 3.0
+  light_sigma_y_frac: 0.45
+  light_sigma_z_frac: 0.80
+  blur_sigma_xy: 0.8
+  blur_sigma_z: 1.2
+  photons: 150.0
+  gaussian_noise_sigma: 0.015
+  background: 0.02
+
+train:
+  cache_dir: "cached/lsfm_beads"
+  max_train_samples: 1024
+  batch_size: 4
+  epochs: 50
+  lr: 3.0e-4
+  weight_decay: 1.0e-5
+  num_workers: 0
+  seed: 0
+  foreground_gamma: 24.0
+  lambda_l1: 0.25
+  lambda_proj: 1.00
+  lambda_dice: 0.20
+
+model:
+  name: "skip_autoencoder_3d"
+  base_channels: 16
+
+eval:
+  batch_size: 1
+  max_samples: null
+
+logging:
+  log_dir: "runs/lsfm_beads/paper_baselines"
+  scalar_every: 10
+  image_every: 100

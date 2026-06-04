@@ -1,0 +1,76 @@
+dataset:
+  name: "lsfm_beads"
+
+bead_dataset:
+  Nz: 64
+  Ny: 64
+  Nx: 64
+  min_beads: 3
+  max_beads: 8
+  bead_radius_px: 2.0
+  radius_jitter: 0.25
+  margin_px: 8
+  distortion_min: 1.8
+  distortion_max: 10.0
+  spatially_varying_distortion: true
+  asymmetric_ri: true
+  asymmetric_ri_strength: 0.30
+  lateral_shear_px: 2.0
+  axial_shift_px: 3.0
+  light_sigma_y_frac: 0.45
+  light_sigma_z_frac: 0.80
+  blur_sigma_xy: 0.8
+  blur_sigma_z: 1.2
+  photons: 150.0
+  gaussian_noise_sigma: 0.015
+  background: 0.02
+
+train:
+  cache_dir: "cached/lsfm_beads"
+  max_train_samples: 1024
+  batch_size: 2
+  epochs: 80
+  lr: 2.0e-5
+  weight_decay: 1.0e-5
+  num_workers: 0
+  seed: 0
+  run_name: "vit_multihead_inr"
+  foreground_gamma: 24.0
+  lambda_l1: 0.25
+  lambda_proj: 1.00
+  lambda_dice: 0.20
+  lambda_axial: 0.25
+  lambda_physics: 0.20
+  lambda_spherical: 0.40
+  lambda_sparsity: 0.20
+  lambda_tv: 0.18
+  lambda_grad_match: 0.12
+  tv_wz: 3.0
+  tv_wy: 1.0
+  tv_wx: 1.0
+  tv_huber_delta: 0.025
+
+model:
+  name: "vit_multihead_inr"
+  latent_dim: 128
+  patch_size: 8
+  vit_embed_dim: 192
+  vit_depth: 4
+  vit_heads: 4
+  inr_hidden: 64
+  inr_depth: 4
+  fourier_features: 16
+  fourier_sigma: 1.5
+  delta_n_max: 1.0
+  decode_chunk: 32768
+  local_feature_dim: 8
+  local_feature_dropout: 0.0
+
+eval:
+  batch_size: 1
+  max_samples: 128
+
+logging:
+  log_dir: "runs/lsfm_beads"
+  scalar_every: 10
+  image_every: 100

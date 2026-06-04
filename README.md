@@ -1,0 +1,219 @@
+# Implicit Neural Representations for 3D LSFM Distortion Correction via Axial Vision Transformers
+
+**EE.49904 Computational Imaging** — Donghyuk Lee (Adviser: Iksung Kang)
+
+Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting axial elongation and mixed Poisson–Gaussian degradation in synthetic LSFM bead calibration volumes. The model learns global $z$-axis distortion context from an axial slice sequence and reconstructs a continuous corrected fluorescence density field via FiLM-conditioned coordinate MLPs, supervised by foreground-weighted losses and a differentiable LSFM forward physics prior.
+
+---
+
+## Overview
+
+| Component | Description |
+|-----------|-------------|
+| **Input** | Distorted 3D bead stack $x \in \mathbb{R}^{1 \times Z \times Y \times X}$ (64³ voxels) |
+| **Output** | Corrected spherical bead volume $\hat{y}$ |
+| **Encoder** | Axial ViT — treats $Z$ slices as a token sequence with a class token |
+| **Decoder** | Multi-head INR — Fourier features + local 3D evidence + FiLM MLP |
+| **Training** | 1,024 cached synthetic volumes; physics-informed multi-term loss |
+
+### Key ideas
+
+- **Global context via ViT latent space:** The encoder captures volume-wide $z$-elongation patterns, enabling amortized inference (one forward pass per volume) instead of per-scene coordinate optimization.
+- **Multi-head disentangled INR:** Latent $z$ splits into auxiliary ($z_{\text{aux}}$) and density ($z_\rho$) subspaces; local coordinate evidence resolves spatial ambiguity for sparse beads.
+- **Physics-informed supervision:** Differentiable re-distortion operator $D(\hat{y}, f)$ enforces forward consistency with the observed stack.
+
+---
+
+## Repository structure
+
+```
+configs/
+  lsfm_beads.yaml           # Synthetic dataset parameters
+  train_vit_inr.yaml        # Proposed ViT+INR training (80 epochs)
+  paper_baselines.yaml      # 2D AE / 3D skip-AE baselines (50 epochs)
+  paper_comparison.yaml     # Evaluation table configuration
+  smoke_lsfm_beads.yaml     # Fast local smoke test
+
+data/
+  lsfm_beads_dataset.py     # Synthetic bead forward model + target generation
+  cached_dataset.py         # Disk cache loader
+
+models/
+  restoration.py            # ViT+INR and baseline architectures
+  inr_primitives.py         # Fourier features, FiLM layers
+
+losses/
+  lsfm_bead_physics.py      # Forward consistency, spherical prior, TV, etc.
+
+scripts/
+  prepare_dataset.py        # Pre-generate cached training set
+  evaluate_restoration.py   # Per-method metrics (PSNR, SSIM, axial ratio)
+  run_paper_comparison.py   # Full paper comparison pipeline
+  setup_server.sh           # Environment bootstrap
+
+train.py                    # Main training entry point
+```
+
+Large artifacts (`cached/`, `runs/`, `*.pt`) are gitignored — regenerate locally (see below).
+
+---
+
+## Setup
+
+```bash
+bash scripts/setup_server.sh
+source .venv/bin/activate
+```
+
+**Requirements:** Python 3.10+, PyTorch 2.2+, NumPy, PyYAML, tqdm, TensorBoard, Matplotlib.
+
+---
+
+## Quick start
+
+### 1. Generate dataset (1,024 volumes)
+
+Synthetic pipeline inspired by Julia et al. (2024): random spherical beads, axial elongation ($f \in [1.8, 10]$), optional asymmetric RI field, light-sheet illumination, 3D Gaussian PSF blur, mixed Poisson–Gaussian noise.
+
+```bash
+python scripts/prepare_dataset.py \
+  --cfg configs/lsfm_beads.yaml \
+  --out cached/lsfm_beads \
+  --n 1024 --seed 0
+```
+
+Each sample stores `stack_distorted`, `stack_corrected`, bead centers/radii, and distortion metadata.
+
+### 2. Train proposed model (80 epochs)
+
+```bash
+python train.py \
+  --cfg configs/train_vit_inr.yaml \
+  --out runs/lsfm_beads/vit_multihead_inr
+```
+
+Monitor with TensorBoard:
+
+```bash
+tensorboard --logdir runs/lsfm_beads/vit_multihead_inr
+```
+
+Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch079.pt`.
+
+### 3. Evaluate
+
+```bash
+python scripts/evaluate_restoration.py \
+  --cfg configs/train_vit_inr.yaml \
+  --cache cached/lsfm_beads \
+  --checkpoint runs/lsfm_beads/vit_multihead_inr/ckpt_epoch079.pt \
+  --methods vit_multihead_inr axial_factor \
+  --out runs/lsfm_beads/eval
+```
+
+### 4. Paper comparison table
+
+Trains missing baselines (if needed) and evaluates all methods on the full 1,024-sample cache:
+
+```bash
+python scripts/run_paper_comparison.py \
+  --cfg configs/paper_comparison.yaml --train-baselines
+```
+
+Outputs: `runs/lsfm_beads/paper_comparison/summary.md` and `summary.tex`.
+
+---
+
+## Model architecture
+
+```
+Distorted volume (B, 1, Z, Y, X)
+        │
+        ▼
+  Axial ViT encoder  ──►  global latent z  ──►  z_aux , z_rho
+        │                                              │
+        ▼                                              ▼
+  Local 3D conv stem                          FiLM-conditioned INR
+  + grid sampling                             (Fourier φ(p) + f_local(p))
+        │                                              │
+        └──────────────────┬───────────────────────────┘
+                           ▼
+              Corrected density field ŷ(p) ∈ [0, 1]
+```
+
+**Supported model names** (`model.name` in config):
+
+| Name | Role |
+|------|------|
+| `vit_multihead_inr` | **Proposed** — ViT + multi-head INR |
+| `paper_ae` | 2D slice-wise autoencoder baseline |
+| `skip_autoencoder_3d` | 3D U-Net-style skip AE baseline |
+| `unet3d` | Compact 3D U-Net |
+| `identity` | No-op (eval only) |
+
+---
+
+## Loss functions
+
+Core supervised terms (Section 4 of the report):
+
+| Symbol | Description |
+|--------|-------------|
+| $L_{\text{wmse}}$ | Foreground-weighted MSE for sparse beads |
+| $L_{\text{proj}}$ | MIP consistency along Z / Y / X (Smooth L1) |
+| $L_{\text{phys}}$ | Forward re-distortion consistency $\|s \cdot D(\hat{y}, f) - x\|_{1,w}$ |
+
+Additional regularizers: axial compactness, soft Dice, spherical bead prior, background sparsity, anisotropic TV, gradient matching. Weights are set in `configs/train_vit_inr.yaml` (`lambda_*`).
+
+---
+
+## Reported results (1,024 test volumes)
+
+| Method | PSNR ↑ | SSIM ↑ | Axial ratio err. ↓ |
+|--------|--------|--------|---------------------|
+| Global axial resampling | 29.35 ± 0.89 | 0.1513 ± 0.0176 | 0.0915 ± 0.0398 |
+| 2D slice autoencoder | 34.63 ± 3.17 | 0.7870 ± 0.1019 | 1.5202 ± 0.8564 |
+| 3D skip autoencoder | **44.80 ± 3.14** | **0.9742 ± 0.0143** | 0.1205 ± 0.1063 |
+| **Ours (ViT+INR + physics prior)** | 39.11 ± 3.34 | 0.8185 ± 0.1335 | **0.0449 ± 0.0246** |
+
+The 3D skip AE achieves the highest pixel-level PSNR/SSIM but introduces geometric blur (high axial ratio error). The 2D AE cannot correct macroscopic $z$-elongation. **Our framework achieves the lowest axial ratio error** while maintaining competitive global restoration, recovering isotropic spherical bead morphology under severe ($8.3\times$) distortion.
+
+Representative qualitative figures in the report: MIP/slice restoration (`result1.png`), 3D isosurface render (`result2.png`), axial intensity profiles with FWHM compression 19→5 layers (`result3.png`), architecture diagram (`result4.png`).
+
+---
+
+## Training configuration
+
+| Setting | Proposed (`train_vit_inr.yaml`) | Baselines (`paper_baselines.yaml`) |
+|---------|--------------------------------|-------------------------------------|
+| Samples | 1,024 | 1,024 |
+| Volume size | 64³ | 64³ |
+| Batch size | 2 | 4 |
+| **Epochs** | **80** | **50** |
+| Learning rate | 2×10⁻⁵ | 3×10⁻⁴ |
+| Distortion range | 1.8× – 10× | same |
+
+---
+
+## Smoke test
+
+```bash
+python scripts/prepare_dataset.py --cfg configs/smoke_lsfm_beads.yaml \
+  --out cached/smoke_lsfm_beads --n 4 --seed 1
+python train.py --cfg configs/smoke_lsfm_beads.yaml \
+  --out runs/smoke_lsfm_beads
+```
+
+---
+
+## References
+
+- Xue et al. (2022) — BRIEF: 3D bi-functional RI and fluorescence microscopy.
+- Feng et al. (2023) — NeuWS: Neural wavefront shaping with continuous representations.
+- Julia et al. (2024) — Distortion correction and denoising of LSFM images (calibration protocol inspiration).
+
+---
+
+## License
+
+Academic project for EE.49904 Computational Imaging, KAIST.

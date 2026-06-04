@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.pytest_cache/
+
+# Artifacts (regenerate locally)
+cached/
+runs/
+figures/
+backup/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+.matplotlib/
+
+# Checkpoints are large — keep only if you explicitly force-add
+*.pt
