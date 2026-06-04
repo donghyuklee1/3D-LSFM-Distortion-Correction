@@ -1,6 +1,7 @@
+### KAIST 26 Spring **EE.49904 Computational Imaging**
 # Implicit Neural Representations for 3D LSFM Distortion Correction via Axial Vision Transformers
 
-**EE.49904 Computational Imaging** — Donghyuk Lee (Adviser: Iksung Kang)
+Author: Donghyuk Lee (Adviser: Iksung Kang)
 
 Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting axial elongation and mixed Poisson–Gaussian degradation in synthetic LSFM bead calibration volumes. The model learns global $z$-axis distortion context from an axial slice sequence and reconstructs a continuous corrected fluorescence density field via FiLM-conditioned coordinate MLPs, supervised by foreground-weighted losses and a differentiable LSFM forward physics prior.
 
