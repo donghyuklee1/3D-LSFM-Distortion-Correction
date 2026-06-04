@@ -1,5 +1,6 @@
 dataset:
   name: "lsfm_beads"
+  n_samples: 8192
 
 bead_dataset:
   Nz: 64
@@ -27,11 +28,17 @@ bead_dataset:
 
 train:
   cache_dir: "cached/lsfm_beads"
-  max_train_samples: 1024
+  max_train_samples: 8192
   batch_size: 2
-  epochs: 12000
-  lr: 2.0e-5
-  weight_decay: 1.0e-5
+  epochs: 1200
+  lr: 1.5e-5
+  lr_min: 1.0e-7
+  lr_schedule: cosine
+  lr_warmup_epochs: 50
+  weight_decay: 5.0e-5
+  grad_clip: 1.0
+  prior_ramp_epochs: 120
+  save_every: 100
   num_workers: 0
   seed: 0
   run_name: "vit_multihead_inr"
@@ -52,25 +59,25 @@ train:
 
 model:
   name: "vit_multihead_inr"
-  latent_dim: 128
+  latent_dim: 256
   patch_size: 8
-  vit_embed_dim: 192
-  vit_depth: 4
-  vit_heads: 4
-  inr_hidden: 64
-  inr_depth: 4
-  fourier_features: 16
-  fourier_sigma: 1.5
+  vit_embed_dim: 384
+  vit_depth: 6
+  vit_heads: 6
+  inr_hidden: 128
+  inr_depth: 6
+  fourier_features: 32
+  fourier_sigma: 2.0
   delta_n_max: 1.0
-  decode_chunk: 32768
-  local_feature_dim: 8
-  local_feature_dropout: 0.0
+  decode_chunk: 16384
+  local_feature_dim: 16
+  local_feature_dropout: 0.05
 
 eval:
   batch_size: 1
-  max_samples: 128
+  max_samples: 512
 
 logging:
   log_dir: "runs/lsfm_beads"
-  scalar_every: 10
-  image_every: 100
+  scalar_every: 50
+  image_every: 500

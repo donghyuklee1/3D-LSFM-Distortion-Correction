@@ -7,7 +7,7 @@ SSIM, and bead axial-ratio error.
 Example:
     python scripts/run_paper_comparison.py --cfg configs/paper_comparison.yaml
 
-Train missing neural baselines first (same 1024-sample cache as ours):
+Train missing neural baselines first (same 8,192-sample cache as ours):
     python scripts/run_paper_comparison.py --cfg configs/paper_comparison.yaml \\
         --train-baselines
 """
@@ -70,6 +70,8 @@ def _update_checkpoints_from_disk(comp_cfg: dict, root: Path) -> dict:
             continue
         model_dir = alias.get(key, key)
         latest = _latest_ckpt(out_root / model_dir)
+        if latest is None and ckpt.parent.exists():
+            latest = _latest_ckpt(ckpt.parent)
         if latest is not None:
             method["checkpoint"] = latest.relative_to(root).as_posix()
             print(f"[resolve] {key} -> {method['checkpoint']}")

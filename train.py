@@ -2,7 +2,7 @@
 
 Example:
     python scripts/prepare_dataset.py --cfg configs/lsfm_beads.yaml \\
-        --out cached/lsfm_beads --n 1024 --seed 0
+        --out cached/lsfm_beads --seed 0
     python train.py --cfg configs/train_vit_inr.yaml \\
         --out runs/lsfm_beads/vit_multihead_inr
 """
@@ -287,6 +287,8 @@ def train(
 
     dataset = _build_dataset(cfg)
     max_train_samples = t.get("max_train_samples")
+    if max_train_samples is None:
+        max_train_samples = cfg.get("dataset", {}).get("n_samples")
     if max_train_samples is not None:
         n = min(int(max_train_samples), len(dataset))
         dataset = Subset(dataset, list(range(n)))
@@ -342,6 +344,35 @@ def train(
             print("[resume] optimizer state restored")
 
     epochs = int(t.get("epochs", 40))
+    peak_lr = float(t.get("lr", 1e-3))
+    lr_schedule = str(t.get("lr_schedule", "constant")).lower()
+    lr_min = float(t.get("lr_min", peak_lr * 0.01))
+    lr_warmup_epochs = max(0, int(t.get("lr_warmup_epochs", 0)))
+    scheduler = None
+    if lr_schedule == "cosine":
+        cosine_epochs = max(epochs - lr_warmup_epochs, 1)
+        if lr_warmup_epochs > 0:
+            warmup = torch.optim.lr_scheduler.LinearLR(
+                opt,
+                start_factor=max(lr_min / peak_lr, 1e-3),
+                end_factor=1.0,
+                total_iters=lr_warmup_epochs,
+            )
+            cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, T_max=cosine_epochs, eta_min=lr_min
+            )
+            scheduler = torch.optim.lr_scheduler.SequentialLR(
+                opt, schedulers=[warmup, cosine], milestones=[lr_warmup_epochs]
+            )
+            print(
+                f"[lr] warmup {lr_warmup_epochs} epochs, then cosine "
+                f"{peak_lr:.2e} -> {lr_min:.2e} over {cosine_epochs} epochs"
+            )
+        else:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, T_max=epochs, eta_min=lr_min
+            )
+            print(f"[lr] cosine decay: peak={peak_lr:.2e} -> min={lr_min:.2e} over {epochs} epochs")
     scalar_every = int(log_cfg.get("scalar_every", 10))
     image_every = int(log_cfg.get("image_every", 100))
     foreground_gamma = float(t.get("foreground_gamma", 8.0))
@@ -355,6 +386,8 @@ def train(
     lambda_tv = float(t.get("lambda_tv", 0.0))
     lambda_grad_match = float(t.get("lambda_grad_match", 0.0))
     prior_ramp_epochs = int(t.get("prior_ramp_epochs", t.get("physics_ramp_epochs", 0)))
+    grad_clip = float(t.get("grad_clip", 1.0))
+    save_every = max(1, int(t.get("save_every", 1)))
     tv_wz = float(t.get("tv_wz", 3.0))
     tv_wy = float(t.get("tv_wy", 1.0))
     tv_wx = float(t.get("tv_wx", 1.0))
@@ -390,7 +423,7 @@ def train(
         eff_lambda_axial = lambda_axial * ramp_scale
         if prior_ramp_epochs > 0 and epoch == start_epoch:
             print(f"[ramp] prior weights scale={ramp_scale:.3f} (epoch {epoch})")
-        pbar = tqdm(loader, desc=f"epoch {epoch:03d} [{name}]")
+        pbar = tqdm(loader, desc=f"epoch {epoch:04d} [{name}]")
         for batch in pbar:
             x = batch["stack_distorted"].to(device, non_blocking=True)
             y = batch["stack_corrected"].to(device, non_blocking=True)
@@ -430,7 +463,8 @@ def train(
 
             opt.zero_grad(set_to_none=True)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             opt.step()
 
             with torch.no_grad():
@@ -441,6 +475,7 @@ def train(
             if step % scalar_every == 0:
                 writer.add_scalar("train/loss", loss.item(), step)
                 writer.add_scalar("train/loss_ema", ema_loss, step)
+                writer.add_scalar("train/lr", opt.param_groups[0]["lr"], step)
                 if prior_ramp_epochs > 0:
                     writer.add_scalar("train/prior_ramp_scale", ramp_scale, step)
                 writer.add_scalar("train/mse", loss_mse.item(), step)
@@ -472,17 +507,22 @@ def train(
             pbar.set_postfix(loss=f"{loss.item():.4f}", psnr=f"{psnr.item():.2f}")
             step += 1
 
-        torch.save(
-            {
-                "model": model.state_dict(),
-                "optimizer": opt.state_dict(),
-                "cfg": cfg,
-                "model_name": name,
-                "epoch": epoch,
-                "step": step,
-            },
-            out_root / f"ckpt_epoch{epoch:03d}.pt",
-        )
+        if scheduler is not None:
+            scheduler.step()
+
+        is_last_epoch = epoch == start_epoch + epochs - 1
+        if (epoch + 1) % save_every == 0 or is_last_epoch:
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimizer": opt.state_dict(),
+                    "cfg": cfg,
+                    "model_name": name,
+                    "epoch": epoch,
+                    "step": step,
+                },
+                out_root / f"ckpt_epoch{epoch:05d}.pt",
+            )
 
     writer.close()
     print(f"[ok] finished -> {out_root}")

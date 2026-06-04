@@ -123,7 +123,7 @@ class LSFMDistortionBeadsDataset(Dataset):
     def __init__(
         self,
         cfg: Mapping[str, Any],
-        length: int = 1024,
+        length: int = 8192,
         seed: int | None = None,
         return_legacy_keys: bool = True,
     ):

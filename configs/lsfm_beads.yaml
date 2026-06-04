@@ -1,5 +1,6 @@
 dataset:
   name: "lsfm_beads"
+  n_samples: 8192
 
 bead_dataset:
   # Small enough for local smoke tests, large enough to represent true 3D stacks.
@@ -34,7 +35,7 @@ bead_dataset:
 train:
   cache_dir: "cached/lsfm_beads"
   batch_size: 2
-  epochs: 12000
+  epochs: 40
   lr: 3.0e-4
   weight_decay: 1.0e-5
   num_workers: 0

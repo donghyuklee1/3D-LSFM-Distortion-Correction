@@ -14,7 +14,7 @@ Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting
 | **Output** | Corrected spherical bead volume $\hat{y}$ |
 | **Encoder** | Axial ViT — treats $Z$ slices as a token sequence with a class token |
 | **Decoder** | Multi-head INR — Fourier features + local 3D evidence + FiLM MLP |
-| **Training** | 1,024 cached synthetic volumes; physics-informed multi-term loss |
+| **Training** | 8,192 cached synthetic volumes; physics-informed multi-term loss |
 
 ### Key ideas
 
@@ -29,8 +29,8 @@ Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting
 ```
 configs/
   lsfm_beads.yaml           # Synthetic dataset parameters
-  train_vit_inr.yaml        # Proposed ViT+INR training (12,000 epochs)
-  paper_baselines.yaml      # 2D AE / 3D skip-AE baselines (12,000 epochs)
+  train_vit_inr.yaml        # Proposed ViT+INR training (1,200 epochs)
+  paper_baselines.yaml      # 2D AE / 3D skip-AE baselines (2,400 epochs, matched steps)
   paper_comparison.yaml     # Evaluation table configuration
   smoke_lsfm_beads.yaml     # Fast local smoke test
 
@@ -71,20 +71,20 @@ source .venv/bin/activate
 
 ## Quick start
 
-### 1. Generate dataset (1,024 volumes)
+### 1. Generate dataset (8,192 volumes)
 
-Synthetic pipeline inspired by Julia et al. (2024): random spherical beads, axial elongation ($f \in [1.8, 10]$), optional asymmetric RI field, light-sheet illumination, 3D Gaussian PSF blur, mixed Poisson–Gaussian noise.
+Synthetic pipeline inspired by Julia et al. (2024): random spherical beads, axial elongation ($f \in [1.8, 10]$), optional asymmetric RI field, light-sheet illumination, 3D Gaussian PSF blur, mixed Poisson–Gaussian noise. Set `dataset.n_samples` in `configs/lsfm_beads.yaml` (default **8,192**, 8× the original short-run cache).
 
 ```bash
 python scripts/prepare_dataset.py \
   --cfg configs/lsfm_beads.yaml \
   --out cached/lsfm_beads \
-  --n 1024 --seed 0
+  --seed 0
 ```
 
 Each sample stores `stack_distorted`, `stack_corrected`, bead centers/radii, and distortion metadata.
 
-### 2. Train proposed model (12,000 epochs)
+### 2. Train proposed model (1,200 epochs)
 
 ```bash
 python train.py \
@@ -98,7 +98,16 @@ Monitor with TensorBoard:
 tensorboard --logdir runs/lsfm_beads/vit_multihead_inr
 ```
 
-Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch11999.pt`.
+Checkpoints are saved every 100 epochs as `ckpt_epoch00000.pt` … `ckpt_epoch01199.pt` (final epoch always kept).
+
+Train baselines separately (2,400 epochs, matched optimizer steps):
+
+```bash
+python train.py --cfg configs/paper_baselines.yaml --model paper_ae \
+  --out runs/lsfm_beads/paper_baselines/paper_ae
+python train.py --cfg configs/paper_baselines.yaml --model skip_autoencoder_3d \
+  --out runs/lsfm_beads/paper_baselines/skip_autoencoder_3d
+```
 
 ### 3. Evaluate
 
@@ -106,14 +115,14 @@ Checkpoints are saved as `ckpt_epoch000.pt` … `ckpt_epoch11999.pt`.
 python scripts/evaluate_restoration.py \
   --cfg configs/train_vit_inr.yaml \
   --cache cached/lsfm_beads \
-  --checkpoint runs/lsfm_beads/vit_multihead_inr/ckpt_epoch11999.pt \
+  --checkpoint runs/lsfm_beads/vit_multihead_inr/ckpt_epoch01199.pt \
   --methods vit_multihead_inr axial_factor \
   --out runs/lsfm_beads/eval
 ```
 
 ### 4. Paper comparison table
 
-Trains missing baselines (if needed) and evaluates all methods on the full 1,024-sample cache:
+Trains missing baselines (if needed) and evaluates all methods on the full 8,192-sample cache:
 
 ```bash
 python scripts/run_paper_comparison.py \
@@ -138,6 +147,17 @@ Outputs: `runs/lsfm_beads/paper_comparison/summary.md` and `summary.tex`.
 | `unet3d` | Compact 3D U-Net |
 | `identity` | No-op (eval only) |
 
+**Capacity (current configs):**
+
+| Component | Proposed (`train_vit_inr.yaml`) | Baselines (`paper_baselines.yaml`) |
+|-----------|--------------------------------|-------------------------------------|
+| Encoder | ViT: 384-d, 6 blocks, 6 heads, patch 8 | — |
+| Latent | 256-d global code | — |
+| Decoder | Multi-head INR: 128×6 MLP, 32 Fourier features | — |
+| Local path | 16-ch 3D conv stem + intensity | — |
+| CNN baselines | — | 2D slice AE / 3D skip AE, `base_channels=32` (~1.4M params) |
+| Total params | ~13M | ~1.4M (skip AE) |
+
 ---
 
 ## Loss functions
@@ -154,7 +174,9 @@ Additional regularizers: axial compactness, soft Dice, spherical bead prior, bac
 
 ---
 
-## Reported results (1,024 test volumes)
+## Reported results (prior 1,024-volume short run)
+
+*Figures below are from an earlier 1,024-sample / short-epoch checkpoint. Re-generate the 8,192-sample cache, re-train, and re-evaluate with `ckpt_epoch01199.pt` for numbers aligned with the current config.*
 
 <img width="815" height="199" alt="image" src="https://github.com/user-attachments/assets/8bbef38f-6012-4111-8585-3d0bfeb694c1" />
 
@@ -170,14 +192,28 @@ Representative qualitative figures in the report: MIP/slice restoration (`result
 
 ## Training configuration
 
+Long-run amortized training on a fixed **8,192-sample** synthetic cache (scaled 8× to match 1,200-epoch training). Baselines run for **2,400 epochs** so total Adam steps match the proposed **1,200-epoch** run (batch 4 vs 2). Both use AdamW, linear LR warmup, and cosine decay.
+
 | Setting | Proposed (`train_vit_inr.yaml`) | Baselines (`paper_baselines.yaml`) |
 |---------|--------------------------------|-------------------------------------|
-| Samples | 1,024 | 1,024 |
+| Training samples | 8,192 | 8,192 |
 | Volume size | 64³ | 64³ |
+| Model capacity | ViT 384-d × 6; INR 128×6; latent 256 | Skip / 2D AE, `base_channels=32` |
+| Optimizer | AdamW | AdamW |
 | Batch size | 2 | 4 |
-| **Epochs** | **12,000** | **12,000** |
-| Learning rate | 2×10⁻⁵ | 3×10⁻⁴ |
+| Steps / epoch | 4,096 | 2,048 |
+| **Epochs** | **1,200** | **2,400** |
+| **Total optimizer steps** | **~4.9M** | **~4.9M** |
+| Peak learning rate | 1.5×10⁻⁵ | 3×10⁻⁴ |
+| LR warmup | 50 epochs | 40 epochs |
+| LR schedule | cosine → 1×10⁻⁷ | cosine → 3×10⁻⁶ |
+| Weight decay | 5×10⁻⁵ | 1×10⁻⁵ |
+| Grad clip (max norm) | 1.0 | 1.0 |
+| Physics-prior ramp | 120 epochs (10%) | — |
+| Checkpoint interval | every 100 epochs | every 200 epochs |
 | Distortion range | 1.8× – 10× | same |
+
+The proposed model uses a lower peak LR, stronger weight decay, and a 10% physics-prior ramp so INR decoding stabilizes before forward-consistency terms reach full weight. `local_feature_dropout=0.05` provides mild regularization on the expanded local stem.
 
 ---
 
