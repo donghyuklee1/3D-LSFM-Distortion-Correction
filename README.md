@@ -8,6 +8,7 @@ Amortized **Vision Transformer (ViT) + Multi-Head INR** framework for correcting
 ---
 
 ## Overview
+<img width="2598" height="934" alt="image" src="https://github.com/user-attachments/assets/38a35113-9289-4865-a7e4-143ff71fee28" />
 
 | Component | Description |
 |-----------|-------------|
