@@ -189,33 +189,6 @@ The 3D skip AE achieves the highest pixel-level PSNR/SSIM but introduces geometr
 
 ---
 
-## Training configuration
-
-Long-run amortized training on a fixed **8,192-sample** synthetic cache (scaled 8× to match 1,200-epoch training). Baselines run for **2,400 epochs** so total Adam steps match the proposed **1,200-epoch** run (batch 4 vs 2). Both use AdamW, linear LR warmup, and cosine decay.
-
-| Setting | Proposed (`train_vit_inr.yaml`) | Baselines (`paper_baselines.yaml`) |
-|---------|--------------------------------|-------------------------------------|
-| Training samples | 8,192 | 8,192 |
-| Volume size | 64³ | 64³ |
-| Model capacity | ViT 384-d × 6; INR 128×6; latent 256 | Skip / 2D AE, `base_channels=32` |
-| Optimizer | AdamW | AdamW |
-| Batch size | 2 | 4 |
-| Steps / epoch | 4,096 | 2,048 |
-| **Epochs** | **1,200** | **2,400** |
-| **Total optimizer steps** | **~4.9M** | **~4.9M** |
-| Peak learning rate | 1.5×10⁻⁵ | 3×10⁻⁴ |
-| LR warmup | 50 epochs | 40 epochs |
-| LR schedule | cosine → 1×10⁻⁷ | cosine → 3×10⁻⁶ |
-| Weight decay | 5×10⁻⁵ | 1×10⁻⁵ |
-| Grad clip (max norm) | 1.0 | 1.0 |
-| Physics-prior ramp | 120 epochs (10%) | — |
-| Checkpoint interval | every 100 epochs | every 200 epochs |
-| Distortion range | 1.8× – 10× | same |
-
-The proposed model uses a lower peak LR, stronger weight decay, and a 10% physics-prior ramp so INR decoding stabilizes before forward-consistency terms reach full weight. `local_feature_dropout=0.05` provides mild regularization on the expanded local stem.
-
----
-
 ## Smoke test
 
 ```bash
