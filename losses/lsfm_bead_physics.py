@@ -1,11 +1,3 @@
-"""Differentiable LSFM bead imaging physics for restoration priors.
-
-The synthetic bead dataset degrades corrected spherical beads by:
-    corrected -> axial z-stretch -> light-sheet profile -> Gaussian blur -> noise
-
-This module exposes the deterministic part of that chain as a physics prior so
-restoration training can penalize predictions that violate the forward model.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,13 +8,11 @@ import torch.nn.functional as F
 
 from data.lsfm_beads_dataset import BeadDistortionConfig, _cfg_from_mapping, _separable_gaussian_blur3d
 
-
 def _meshgrid_zyx(Nz: int, Ny: int, Nx: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     z = torch.arange(Nz, dtype=torch.float32, device=device)
     y = torch.arange(Ny, dtype=torch.float32, device=device)
     x = torch.arange(Nx, dtype=torch.float32, device=device)
     return torch.meshgrid(z, y, x, indexing="ij")
-
 
 def light_profile_zyx(cfg: BeadDistortionConfig, device: torch.device) -> torch.Tensor:
     zz, yy, _ = _meshgrid_zyx(cfg.Nz, cfg.Ny, cfg.Nx, device)
@@ -35,9 +25,7 @@ def light_profile_zyx(cfg: BeadDistortionConfig, device: torch.device) -> torch.
     )
     return 0.35 + 0.65 * profile
 
-
 def normalise01_per_volume(x: torch.Tensor) -> torch.Tensor:
-    """Normalize each (B,1,Z,Y,X) volume to [0, 1]."""
     if x.dim() != 5:
         raise ValueError(f"expected (B,1,Z,Y,X), got {tuple(x.shape)}")
     b = x.shape[0]
@@ -46,9 +34,7 @@ def normalise01_per_volume(x: torch.Tensor) -> torch.Tensor:
     hi = flat.max(dim=1, keepdim=True).values.view(b, 1, 1, 1, 1)
     return ((x - lo) / (hi - lo).clamp_min(1e-8)).clamp_min(0.0)
 
-
 def axial_stretch_3d(vol: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
-    """Elongate a compact bead volume along z (inverse of z-compression correction)."""
     b, c, z, y, xw = vol.shape
     device = vol.device
     zz = torch.linspace(-1, 1, z, device=device)
@@ -62,7 +48,6 @@ def axial_stretch_3d(vol: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
         grids.append(torch.stack([x_grid, y_grid, z_in], dim=-1))
     grid = torch.stack(grids, dim=0)
     return F.grid_sample(vol, grid, mode="bilinear", padding_mode="zeros", align_corners=True)
-
 
 @dataclass
 class LSFMBeadPhysicsPrior:
@@ -80,7 +65,6 @@ class LSFMBeadPhysicsPrior:
         *,
         renormalize: bool = True,
     ) -> torch.Tensor:
-        """Apply deterministic LSFM degradation without Poisson/Gaussian noise."""
         device = corrected.device
         stretched = axial_stretch_3d(corrected, factor)
         profile = light_profile_zyx(self.cfg, device)
@@ -107,7 +91,6 @@ class LSFMBeadPhysicsPrior:
         distorted: torch.Tensor,
         factor: torch.Tensor,
     ) -> torch.Tensor:
-        """Scale-matched forward consistency to avoid conflicting per-volume renorm."""
         sim = self.forward_distort(pred_corrected, factor, renormalize=False)
         w = distorted / distorted.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)
         w = (0.15 + 0.85 * w.clamp(0.0, 1.0))
@@ -117,7 +100,6 @@ class LSFMBeadPhysicsPrior:
         diff = F.smooth_l1_loss(sim, distorted, reduction="none")
         return (diff * w).sum() / w.sum().clamp_min(1e-8)
 
-
 def bead_spherical_prior_loss(
     pred: torch.Tensor,
     centers: torch.Tensor,
@@ -125,7 +107,6 @@ def bead_spherical_prior_loss(
     valid: torch.Tensor,
     eps: float = 1e-8,
 ) -> torch.Tensor:
-    """Differentiable per-bead |sigma_z / mean(sigma_y,sigma_x) - 1| prior."""
     if pred.dim() != 5:
         raise ValueError(f"expected pred (B,1,Z,Y,X), got {tuple(pred.shape)}")
     b, _, nz, ny, nx = pred.shape
@@ -162,13 +143,11 @@ def bead_spherical_prior_loss(
         return pred.new_zeros(())
     return torch.stack(losses).mean()
 
-
 def _huber1d(x: torch.Tensor, delta: float) -> torch.Tensor:
     ax = x.abs()
     quad = torch.clamp(ax, max=delta)
     lin = ax - quad
     return 0.5 * quad.pow(2) / delta + lin
-
 
 def foreground_anisotropic_tv_loss(
     pred: torch.Tensor,
@@ -180,7 +159,6 @@ def foreground_anisotropic_tv_loss(
     huber_delta: float = 0.025,
     gamma: float = 8.0,
 ) -> torch.Tensor:
-    """Edge-preserving smoothness inside beads; stronger along z to kill axial streaks."""
     fg = (target / target.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)).clamp(0.0, 1.0)
     fg = (0.2 + 0.8 * fg).pow(0.75)
     dz = pred[:, :, 1:, :, :] - pred[:, :, :-1, :, :]
@@ -194,9 +172,7 @@ def foreground_anisotropic_tv_loss(
     loss_x = (_huber1d(dx, huber_delta) * mx).sum() / mx.sum().clamp_min(1e-8)
     return wz * loss_z + wy * loss_y + wx * loss_x
 
-
 def gradient_match_loss(pred: torch.Tensor, target: torch.Tensor, gamma: float = 8.0) -> torch.Tensor:
-    """Match pred edge structure to the smooth spherical GT inside bead support."""
     fg = (target / target.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)).clamp(0.0, 1.0)
     fg = 0.15 + 0.85 * fg
     terms = []
@@ -208,9 +184,7 @@ def gradient_match_loss(pred: torch.Tensor, target: torch.Tensor, gamma: float =
         terms.append((diff * w).sum() / w.sum().clamp_min(1e-8))
     return sum(terms) / len(terms)
 
-
 def background_sparsity_loss(pred: torch.Tensor, target: torch.Tensor, gamma: float = 8.0) -> torch.Tensor:
-    """Suppress predicted intensity outside the bead support defined by target."""
     fg = (target / target.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)).clamp(0.0, 1.0)
     bg = (1.0 - fg).clamp(0.0, 1.0)
     w = 1.0 + gamma * bg

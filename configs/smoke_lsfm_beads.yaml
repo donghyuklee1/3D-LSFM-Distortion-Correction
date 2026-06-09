@@ -1,6 +1,5 @@
 dataset:
   name: "lsfm_beads"
-
 bead_dataset:
   Nz: 32
   Ny: 32
@@ -24,7 +23,6 @@ bead_dataset:
   photons: 100.0
   gaussian_noise_sigma: 0.02
   background: 0.02
-
 train:
   cache_dir: "cached/smoke_lsfm_beads"
   batch_size: 2
@@ -36,15 +34,12 @@ train:
   foreground_gamma: 8.0
   lambda_l1: 0.25
   lambda_proj: 0.50
-
 model:
   name: "skip_autoencoder_3d"
   base_channels: 8
-
 eval:
   batch_size: 1
   max_samples: 4
-
 logging:
   log_dir: "runs/smoke_lsfm_beads"
   scalar_every: 1

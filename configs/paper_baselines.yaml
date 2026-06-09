@@ -1,9 +1,6 @@
-# Train neural baselines on the same 8,192-sample cache as the ViT+INR model.
-# Baseline epochs are doubled so total Adam steps match the proposed run (batch 4 vs 2).
 dataset:
   name: "lsfm_beads"
   n_samples: 8192
-
 bead_dataset:
   Nz: 64
   Ny: 64
@@ -27,7 +24,6 @@ bead_dataset:
   photons: 150.0
   gaussian_noise_sigma: 0.015
   background: 0.02
-
 train:
   cache_dir: "cached/lsfm_beads"
   max_train_samples: 8192
@@ -46,15 +42,12 @@ train:
   lambda_l1: 0.25
   lambda_proj: 1.00
   lambda_dice: 0.20
-
 model:
   name: "skip_autoencoder_3d"
   base_channels: 32
-
 eval:
   batch_size: 1
   max_samples: null
-
 logging:
   log_dir: "runs/lsfm_beads/paper_baselines"
   scalar_every: 50

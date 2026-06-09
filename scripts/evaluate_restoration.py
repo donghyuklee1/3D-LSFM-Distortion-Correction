@@ -1,14 +1,3 @@
-"""Evaluate LSFM bead distortion-correction methods.
-
-Outputs:
-  - metrics.csv: per-sample metrics for each method
-  - summary.md : mean ± std table suitable for a paper draft
-
-Example:
-    python scripts/evaluate_restoration.py --cfg configs/lsfm_beads.yaml \
-        --cache cached/lsfm_beads --out runs/lsfm_beads/eval \
-        --checkpoints ours:runs/lsfm_beads/skip_ae3d/ckpt_epoch039.pt
-"""
 from __future__ import annotations
 
 import argparse
@@ -25,9 +14,8 @@ from tqdm.auto import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from data import CachedAOStackDataset, LSFMDistortionBeadsDataset  # noqa: E402
-from models.restoration import build_restoration_model  # noqa: E402
-
+from data import CachedAOStackDataset, LSFMDistortionBeadsDataset
+from models.restoration import build_restoration_model
 
 def _device() -> torch.device:
     if torch.cuda.is_available():
@@ -36,24 +24,19 @@ def _device() -> torch.device:
         return torch.device("mps")
     return torch.device("cpu")
 
-
 def mse(pred: torch.Tensor, target: torch.Tensor) -> float:
     return F.mse_loss(pred, target).item()
-
 
 def psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = 1.0) -> float:
     e = F.mse_loss(pred, target).clamp_min(1e-12)
     return float(20.0 * math.log10(data_range) - 10.0 * torch.log10(e).item())
-
 
 def nrmse(pred: torch.Tensor, target: torch.Tensor) -> float:
     rmse = torch.sqrt(F.mse_loss(pred, target))
     denom = (target.amax() - target.amin()).clamp_min(1e-8)
     return (rmse / denom).item()
 
-
 def ssim_global(pred: torch.Tensor, target: torch.Tensor, data_range: float = 1.0) -> float:
-    """Global SSIM over a volume; deterministic and dependency-free."""
     x = pred.float().reshape(-1)
     y = target.float().reshape(-1)
     c1 = (0.01 * data_range) ** 2
@@ -66,14 +49,7 @@ def ssim_global(pred: torch.Tensor, target: torch.Tensor, data_range: float = 1.
     val = ((2 * mux * muy + c1) * (2 * cov + c2)) / ((mux**2 + muy**2 + c1) * (vx + vy + c2))
     return val.clamp(-1.0, 1.0).item()
 
-
 def axial_correct_global(x: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
-    """Classical single-factor z-compression baseline.
-
-    This is the correction-factor baseline discussed in the paper's related
-    work: apply one global axial factor to the whole stack. It cannot handle
-    non-uniform bead-wise distortion but provides an important non-DL baseline.
-    """
     b, c, z, y, xw = x.shape
     device = x.device
     zz = torch.linspace(-1, 1, z, device=device)
@@ -88,9 +64,7 @@ def axial_correct_global(x: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
     grid = torch.stack(grids, dim=0)
     return F.grid_sample(x, grid, mode="bilinear", padding_mode="zeros", align_corners=True)
 
-
 def bead_axial_ratio_error(vol: torch.Tensor, centers: torch.Tensor, radii: torch.Tensor) -> float:
-    """Mean |std_z / mean(std_y,std_x) - 1| around known bead centers."""
     v = vol.detach().float()
     if v.dim() == 5:
         v = v[0, 0]
@@ -122,7 +96,6 @@ def bead_axial_ratio_error(vol: torch.Tensor, centers: torch.Tensor, radii: torc
         errors.append(abs(float(ratio.item()) - 1.0))
     return float(sum(errors) / len(errors)) if errors else float("nan")
 
-
 def _load_dataset(cfg: dict, cache: str | None, n: int | None):
     if cache:
         ds = CachedAOStackDataset(cache)
@@ -136,7 +109,6 @@ def _load_dataset(cfg: dict, cache: str | None, n: int | None):
             seed=cfg.get("train", {}).get("seed", 0),
         )
 
-
 def _parse_checkpoints(items: list[str]) -> dict[str, str]:
     out = {}
     for item in items:
@@ -145,7 +117,6 @@ def _parse_checkpoints(items: list[str]) -> dict[str, str]:
         name, path = item.split(":", 1)
         out[name] = path
     return out
-
 
 def _parse_labels(items: list[str]) -> dict[str, str]:
     out = {}
@@ -156,7 +127,6 @@ def _parse_labels(items: list[str]) -> dict[str, str]:
         out[key] = label
     return out
 
-
 PAPER_METRIC_INFO = {
     "psnr": {"header": "PSNR (dB)", "direction": "up", "decimals": 2},
     "ssim": {"header": "SSIM", "direction": "up", "decimals": 4},
@@ -165,11 +135,9 @@ PAPER_METRIC_INFO = {
     "nrmse": {"header": "NRMSE", "direction": "down", "decimals": 4},
 }
 
-
 def _format_metric(mean: float, std: float, metric: str) -> str:
     decimals = PAPER_METRIC_INFO.get(metric, {}).get("decimals", 4)
     return f"{mean:.{decimals}f} ± {std:.{decimals}f}"
-
 
 def _write_summary(
     summary: dict[str, list[dict]],
@@ -238,7 +206,6 @@ def _write_summary(
             "\\end{table}",
         ])
         (out_dir / "summary.tex").write_text("\n".join(tex_lines) + "\n")
-
 
 def main():
     p = argparse.ArgumentParser()
@@ -343,7 +310,6 @@ def main():
     )
     extra = f", {out_dir / 'summary.tex'}" if args.paper_table else ""
     print(f"[ok] wrote {csv_path}, {out_dir / 'summary.md'}{extra}")
-
 
 if __name__ == "__main__":
     main()

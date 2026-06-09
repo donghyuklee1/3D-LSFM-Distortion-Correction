@@ -1,16 +1,3 @@
-"""Run a paper-ready quantitative comparison for LSFM bead restoration.
-
-Compares the proposed ViT+INR model against two learned baselines and one
-classical baseline, then writes markdown + LaTeX summary tables with PSNR,
-SSIM, and bead axial-ratio error.
-
-Example:
-    python scripts/run_paper_comparison.py --cfg configs/paper_comparison.yaml
-
-Train missing neural baselines first (same 8,192-sample cache as ours):
-    python scripts/run_paper_comparison.py --cfg configs/paper_comparison.yaml \\
-        --train-baselines
-"""
 from __future__ import annotations
 
 import argparse
@@ -23,20 +10,17 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from train import train  # noqa: E402
-
+from train import train
 
 def _latest_ckpt(run_dir: Path) -> Path | None:
     ckpts = sorted(run_dir.glob("ckpt_epoch*.pt"))
     return ckpts[-1] if ckpts else None
-
 
 def _resolve_checkpoint(path_str: str, root: Path) -> Path:
     path = Path(path_str)
     if not path.is_absolute():
         path = root / path
     return path
-
 
 def _train_missing_baselines(comp_cfg: dict, root: Path) -> None:
     tb = comp_cfg.get("train_baselines", {})
@@ -51,7 +35,6 @@ def _train_missing_baselines(comp_cfg: dict, root: Path) -> None:
             continue
         print(f"[train] baseline {model_name} -> {run_dir}")
         train(train_cfg, model_name=model_name, out_dir=run_dir.as_posix())
-
 
 def _update_checkpoints_from_disk(comp_cfg: dict, root: Path) -> dict:
     tb = comp_cfg.get("train_baselines", {})
@@ -76,7 +59,6 @@ def _update_checkpoints_from_disk(comp_cfg: dict, root: Path) -> dict:
             method["checkpoint"] = latest.relative_to(root).as_posix()
             print(f"[resolve] {key} -> {method['checkpoint']}")
     return comp_cfg
-
 
 def main():
     p = argparse.ArgumentParser()
@@ -139,7 +121,6 @@ def main():
 
     print("[run]", " ".join(cmd))
     subprocess.run(cmd, check=True)
-
 
 if __name__ == "__main__":
     main()

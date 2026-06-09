@@ -1,36 +1,27 @@
-# Paper quantitative comparison.
-# Run: python scripts/run_paper_comparison.py --cfg configs/paper_comparison.yaml
-
 dataset_cfg: configs/train_vit_inr.yaml
 cache: cached/lsfm_beads
 max_samples: null
 out: runs/lsfm_beads/paper_comparison
-
 metrics:
   - psnr
   - ssim
   - axial_ratio_error
-
 methods:
   - key: axial_factor
     label: "Global axial resampling"
     type: classical
-
   - key: paper_ae
     label: "2D slice autoencoder"
     type: checkpoint
     checkpoint: runs/lsfm_beads/paper_baselines/paper_ae/ckpt_epoch02399.pt
-
   - key: skip_ae3d
     label: "3D skip autoencoder"
     type: checkpoint
     checkpoint: runs/lsfm_beads/paper_baselines/skip_autoencoder_3d/ckpt_epoch02399.pt
-
   - key: ours
     label: "Ours (ViT+INR + physics prior)"
     type: checkpoint
     checkpoint: runs/lsfm_beads/vit_multihead_inr/ckpt_epoch01199.pt
-
 train_baselines:
   cfg: configs/paper_baselines.yaml
   models:

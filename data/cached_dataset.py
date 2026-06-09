@@ -1,17 +1,9 @@
-"""Cached version of the synthetic dataset.
-
-`prepare_dataset.py` writes one .pt file per sample to `root/`. This class just
-loads them. It is significantly faster than online generation because the BPM
-forward simulation is run only *once per sample* during preparation, not every
-epoch.
-"""
 from __future__ import annotations
 
 from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
-
 
 class CachedAOStackDataset(Dataset):
     def __init__(self, root: str | Path):

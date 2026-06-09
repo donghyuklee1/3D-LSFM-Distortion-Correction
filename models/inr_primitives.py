@@ -1,4 +1,3 @@
-"""Shared INR building blocks for the restoration ViT+INR decoder."""
 from __future__ import annotations
 
 import math
@@ -7,9 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class DeltaNBoundedHead(nn.Module):
-    """Soft-bound output via scaled tanh."""
 
     def __init__(self, delta_n_max: float, scale: float = 3.0):
         super().__init__()
@@ -19,9 +16,7 @@ class DeltaNBoundedHead(nn.Module):
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         return self.delta_n_max * torch.tanh(z / self.scale)
 
-
 class FourierFeatures(nn.Module):
-    """Random Fourier features with optional coarse-to-fine band limiting."""
 
     def __init__(self, in_dim: int = 3, num_features: int = 64, sigma: float = 2.0):
         super().__init__()
@@ -49,9 +44,7 @@ class FourierFeatures(nn.Module):
         w = self._band_weights(x.device)
         return torch.cat([torch.sin(proj) * w, torch.cos(proj) * w], dim=-1)
 
-
 class FiLMLayer(nn.Module):
-    """Linear + FiLM conditioning + GELU."""
 
     def __init__(self, in_dim: int, out_dim: int, cond_dim: int):
         super().__init__()

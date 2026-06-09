@@ -1,9 +1,3 @@
-"""Restoration baselines for LSFM bead distortion correction.
-
-All models map a distorted 3D stack ``(B, 1, Z, Y, X)`` to a corrected stack
-with the same shape. The module intentionally keeps architectures modest so
-that comparisons can be reproduced on a local workstation.
-"""
 from __future__ import annotations
 
 import torch
@@ -13,19 +7,11 @@ import torch.nn.functional as F
 from utils.coords import make_voxel_grid
 from models.inr_primitives import DeltaNBoundedHead, FiLMLayer, FourierFeatures
 
-
 class IdentityRestorer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
 
-
 class SliceAutoEncoder2D(nn.Module):
-    """Two-level slice-wise convolutional auto-encoder.
-
-    This mirrors the paper's first distortion-correction prototype: each
-    z-slice is processed independently, so the model can denoise/deblur local
-    2D structure but has no explicit mechanism to reason over axial elongation.
-    """
 
     def __init__(self, base_channels: int = 32):
         super().__init__()
@@ -55,7 +41,6 @@ class SliceAutoEncoder2D(nn.Module):
         y = y.reshape(b, z, 1, h, w).permute(0, 2, 1, 3, 4)
         return y.sigmoid()
 
-
 class ConvBlock3D(nn.Module):
     def __init__(self, in_ch: int, out_ch: int):
         super().__init__()
@@ -71,9 +56,7 @@ class ConvBlock3D(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-
 class SkipAutoEncoder3D(nn.Module):
-    """Compact 3D auto-encoder with skip connections."""
 
     def __init__(self, base_channels: int = 16):
         super().__init__()
@@ -97,9 +80,7 @@ class SkipAutoEncoder3D(nn.Module):
         d1 = self.dec1(torch.cat([d1, e1], dim=1))
         return self.out(d1).sigmoid()
 
-
 class SmallUNet3D(nn.Module):
-    """Slightly stronger 3D U-Net baseline for paper-level comparisons."""
 
     def __init__(self, base_channels: int = 16):
         super().__init__()
@@ -126,13 +107,7 @@ class SmallUNet3D(nn.Module):
         d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
         return self.out(d1).sigmoid()
 
-
 class StackViTEncoder(nn.Module):
-    """Small pure-PyTorch ViT encoder for z-stack channels.
-
-    This avoids depending on timm/torchvision on the remote GPU environment
-    while preserving the intended Vision Transformer tokenization.
-    """
 
     def __init__(
         self,
@@ -174,9 +149,7 @@ class StackViTEncoder(nn.Module):
         h = self.blocks(h)
         return self.latent_proj(self.norm(h[:, 0]))
 
-
 class LocalFiLMBranch(nn.Module):
-    """FiLM-conditioned MLP branch for coordinate-local INR decoding."""
 
     def __init__(self, in_dim: int, cond_dim: int, hidden: int, depth: int, out_dim: int):
         super().__init__()
@@ -194,9 +167,7 @@ class LocalFiLMBranch(nn.Module):
             h = layer(h, z)
         return self.head(h)
 
-
 class VolumeMultiHeadINR(nn.Module):
-    """Two-branch INR with global ViT conditioning and local sampled evidence."""
 
     def __init__(
         self,
@@ -232,24 +203,7 @@ class VolumeMultiHeadINR(nn.Module):
         rho = F.softplus(self.branch_rho(feats, z_rho))
         return aux, rho
 
-
 class ViTMultiHeadINRRestorer(nn.Module):
-    """ViT encoder + multi-head conditional INR for bead distortion correction.
-
-    This keeps the project core architecture:
-
-        distorted 3D stack -> ViT latent -> multi-head INR(coords | latent)
-
-    The distorted volume is interpreted as a stack of z-slices, i.e. ViT input
-    ``(B, Z, Y, X)`` where each z-plane is one channel. The INR then queries a
-    continuous 3D coordinate grid and predicts two fields:
-
-    * ``aux_delta``: auxiliary distortion/RI-like branch. It is not supervised
-      directly in the bead-restoration task but gives the latent a separate
-      branch for geometric distortion information.
-    * ``rho``: corrected bead density branch. This is mapped to ``[0, 1]`` via
-      ``1 - exp(-rho)`` and used as the corrected volume.
-    """
 
     def __init__(
         self,
@@ -311,7 +265,7 @@ class ViTMultiHeadINRRestorer(nn.Module):
         self.last_aux_delta: torch.Tensor | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (B, 1, Z, Y, X) -> ViT stack: (B, Z, Y, X)
+
         stack = x[:, 0]
         z = self.encoder(stack)
         B = stack.shape[0]
@@ -322,8 +276,7 @@ class ViTMultiHeadINRRestorer(nn.Module):
         for c in coords.split(self.decode_chunk, dim=1):
             local_feats = self._sample_local_features(local_volume, c)
             if self.training and self.local_feature_dropout > 0:
-                # Drop stem features (not raw intensity) so the INR relies more
-                # on global ViT context under severe axial elongation.
+
                 stem = local_feats[..., 1:]
                 stem = F.dropout(stem, p=self.local_feature_dropout, training=True)
                 local_feats = torch.cat([local_feats[..., :1], stem], dim=-1)
@@ -338,11 +291,10 @@ class ViTMultiHeadINRRestorer(nn.Module):
 
     @staticmethod
     def _sample_local_features(feature_volume: torch.Tensor, coords_zyx: torch.Tensor) -> torch.Tensor:
-        # grid_sample expects 5D volume coordinates in x, y, z order.
+
         grid = coords_zyx[..., [2, 1, 0]].view(coords_zyx.shape[0], coords_zyx.shape[1], 1, 1, 3)
         sampled = F.grid_sample(feature_volume, grid, mode="bilinear", align_corners=True)
         return sampled[:, :, :, 0, 0].transpose(1, 2).contiguous()
-
 
 def build_restoration_model(
     name: str,

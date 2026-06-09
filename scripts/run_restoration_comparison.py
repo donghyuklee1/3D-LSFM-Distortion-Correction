@@ -1,13 +1,3 @@
-"""Train restoration models and run one paper-style quantitative comparison.
-
-This is the reproducibility entry point for the LSFM bead distortion experiment.
-It trains the requested neural baselines, evaluates them alongside non-learned
-baselines (`identity`, `axial_factor`), and writes `metrics.csv` + `summary.md`.
-
-Example:
-    python scripts/run_restoration_comparison.py --cfg configs/lsfm_beads.yaml \
-        --cache cached/lsfm_beads --models paper_ae skip_autoencoder_3d unet3d
-"""
 from __future__ import annotations
 
 import argparse
@@ -18,8 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from train import train  # noqa: E402
-
+from train import train
 
 def main():
     p = argparse.ArgumentParser()
@@ -54,7 +43,6 @@ def main():
     if args.max_samples is not None:
         cmd.extend(["--max-samples", str(args.max_samples)])
     subprocess.run(cmd, check=True)
-
 
 if __name__ == "__main__":
     main()

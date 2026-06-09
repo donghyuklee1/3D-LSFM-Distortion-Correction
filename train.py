@@ -1,11 +1,3 @@
-"""Train LSFM bead distortion-correction models.
-
-Example:
-    python scripts/prepare_dataset.py --cfg configs/lsfm_beads.yaml \\
-        --out cached/lsfm_beads --seed 0
-    python train.py --cfg configs/train_vit_inr.yaml \\
-        --out runs/lsfm_beads/vit_multihead_inr
-"""
 from __future__ import annotations
 
 import argparse
@@ -31,14 +23,12 @@ from losses.lsfm_bead_physics import (
 from models.restoration import build_restoration_model
 from utils import viz
 
-
 def _device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
-
 
 def _collate_train(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
     factors = []
@@ -68,7 +58,6 @@ def _collate_train(batch: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tens
         "distortion_factors_per_bead": per_bead_factors,
     }
 
-
 def _sample_distortion_factor(sample: dict) -> float:
     f = float(sample["distortion_factor"])
     per_bead = sample.get("distortion_factors_per_bead")
@@ -76,14 +65,12 @@ def _sample_distortion_factor(sample: dict) -> float:
         f = max(f, float(per_bead.max()))
     return f
 
-
 def _select_hard_indices(dataset: CachedAOStackDataset, min_factor: float) -> list[int]:
     indices: list[int] = []
     for i in range(len(dataset)):
         if _sample_distortion_factor(dataset[i]) >= min_factor:
             indices.append(i)
     return indices
-
 
 def _distortion_sample_weight(
     factor: torch.Tensor,
@@ -97,44 +84,29 @@ def _distortion_sample_weight(
     norm = (factor - min_factor) / max(max_factor - min_factor, 1e-6)
     return 1.0 + alpha * norm.clamp(0.0, 1.0)
 
-
 def _linear_ramp(epoch: int, start_epoch: int, ramp_epochs: int, target: float) -> float:
-    """Linearly ramp a loss weight from 0 -> target over the first ramp_epochs."""
     if target <= 0 or ramp_epochs <= 0:
         return target
     progress = (epoch - start_epoch + 1) / float(ramp_epochs)
     return target * min(1.0, max(0.0, progress))
 
-
 def _foreground_weights(target: torch.Tensor, gamma: float = 8.0) -> torch.Tensor:
-    """Per-voxel weights for sparse bead volumes.
-
-    The target is mostly black background. Plain MSE therefore reports a small
-    loss even when beads are missed, and its per-batch value changes strongly
-    with bead count. A smooth intensity-based foreground weight gives bead
-    voxels stable influence while keeping background suppression active.
-    """
     fg = (target / target.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)).clamp(0.0, 1.0)
     return 1.0 + gamma * fg
 
-
 def _projection_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    """Match max-intensity projections along z/y/x to stabilise 3D shape."""
     loss = 0.0
     for dim in (-3, -2, -1):
         loss = loss + F.smooth_l1_loss(pred.amax(dim=dim), target.amax(dim=dim))
     return loss / 3.0
 
-
 def _soft_dice_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
-    """Foreground overlap loss for sparse bead volumes."""
     p = pred.clamp(0.0, 1.0)
     t = (target / target.amax(dim=(-3, -2, -1), keepdim=True).clamp_min(1e-8)).clamp(0.0, 1.0)
     dims = tuple(range(1, p.ndim))
     inter = (p * t).sum(dim=dims)
     denom = p.square().sum(dim=dims) + t.square().sum(dim=dims)
     return (1.0 - (2.0 * inter + eps) / (denom + eps)).mean()
-
 
 def _wmse_per_sample(
     pred: torch.Tensor,
@@ -147,13 +119,11 @@ def _wmse_per_sample(
     den = w.flatten(1).sum(dim=1).clamp_min(1e-8)
     return num / den
 
-
 def _axial_compactness_loss(
     pred: torch.Tensor,
     target: torch.Tensor,
     eps: float = 1e-8,
 ) -> torch.Tensor:
-    """Penalize excess z-axis spread relative to the compact bead target."""
     p_z = pred.sum(dim=(-2, -1))
     t_z = target.sum(dim=(-2, -1))
     p_prob = p_z / p_z.sum(dim=-1, keepdim=True).clamp_min(eps)
@@ -167,13 +137,11 @@ def _axial_compactness_loss(
     moment_match = F.smooth_l1_loss(p_var, t_var)
     return spread_penalty + moment_match
 
-
 def _weighted_mean(values: torch.Tensor, weight: torch.Tensor | None) -> torch.Tensor:
     if weight is None:
         return values.mean()
     w = weight.to(values.device)
     return (values * w).sum() / w.sum().clamp_min(1e-8)
-
 
 def restoration_loss(
     pred: torch.Tensor,
@@ -249,7 +217,6 @@ def restoration_loss(
         parts["grad_match"] = loss_grad.detach()
     return loss, parts
 
-
 def _build_dataset(cfg: dict):
     t = cfg.get("train", {})
     cache_dir = t.get("cache_dir")
@@ -270,7 +237,6 @@ def _build_dataset(cfg: dict):
     seed = int(t.get("seed", 0))
     print(f"[data] online LSFMDistortionBeadsDataset: {length}")
     return LSFMDistortionBeadsDataset(cfg, length=length, seed=seed)
-
 
 def train(
     cfg_path: str,
@@ -498,8 +464,7 @@ def train(
                 writer.add_scalar("train/psnr_db", psnr.item(), step)
                 writer.add_scalar("train/psnr_db_ema", ema_psnr, step)
             if step % image_every == 0:
-                # TensorBoard is 2D-only, so expose the 3D stack through
-                # slice montages, orthogonal planes, and maximum projections.
+
                 viz.log_scalar_volume_views(writer, "img/input_distorted_3d", x[0], step)
                 viz.log_scalar_volume_views(writer, "img/pred_corrected_3d", pred[0], step)
                 viz.log_scalar_volume_views(writer, "img/target_corrected_3d", y[0], step)
@@ -527,7 +492,6 @@ def train(
     writer.close()
     print(f"[ok] finished -> {out_root}")
     return out_root
-
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

@@ -1,13 +1,3 @@
-"""Pre-generate a fixed LSFM bead dataset and write it to disk.
-
-Usage:
-    python scripts/prepare_dataset.py \\
-        --cfg configs/lsfm_beads.yaml \\
-        --out cached/lsfm_beads \\
-        --seed 0
-
-If --n is omitted, uses dataset.n_samples from the config (default 8,192).
-"""
 from __future__ import annotations
 
 import argparse
@@ -23,8 +13,7 @@ from tqdm.auto import tqdm
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from data import LSFMDistortionBeadsDataset  # noqa: E402
-
+from data import LSFMDistortionBeadsDataset
 
 def _generate_one(args):
     idx, cfg, out_dir, seed = args
@@ -37,7 +26,6 @@ def _generate_one(args):
     torch.save(sample, tmp_path)
     tmp_path.replace(out_path)
     return out_path
-
 
 def main():
     p = argparse.ArgumentParser(description="Cache synthetic LSFM bead volumes.")
@@ -90,7 +78,6 @@ def main():
             f"elapsed   = {meta['elapsed_sec']:.1f} sec\n"
         )
     print(f"[ok] {n_samples} samples in {meta['elapsed_sec']:.1f}s -> {out_dir}")
-
 
 if __name__ == "__main__":
     main()

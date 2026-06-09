@@ -1,13 +1,3 @@
-"""TensorBoard visualisation helpers for the AO pipeline.
-
-These functions are *pure*: each takes tensors + a `SummaryWriter` and a
-global step, and writes images / histograms / figures.
-
-Image conventions for tensorboard:
-    * use add_image with dataformats="HW" (single-channel) or "CHW"/"NCHW"
-    * volumetric views show every Z-slice side-by-side so the user can
-      visually confirm the 3D structure of pred / GT.
-"""
 from __future__ import annotations
 
 import io
@@ -19,32 +9,17 @@ import torch.nn.functional as F
 if TYPE_CHECKING:
     from torch.utils.tensorboard import SummaryWriter
 
-
-# --------------------------------------------------------------------------- #
 def _nrm(x: torch.Tensor) -> torch.Tensor:
-    """Per-frame min-max normalisation in [0, 1]."""
     x = x.detach().float()
     lo = x.amin()
     hi = x.amax()
     return (x - lo) / (hi - lo + 1e-8)
 
-
 def _nrm_shared(x: torch.Tensor, vmax: float) -> torch.Tensor:
-    """Signed normalisation around 0 with a SHARED dynamic range `vmax`.
-
-    Maps [-vmax, +vmax] -> [0, 1] (clamped).  Critical for pred-vs-GT
-    comparisons of signed fields like delta_n: if each frame is normalised
-    independently, a near-zero pred would look 'as bright' as a non-trivial
-    GT and the user can't tell whether the model actually recovered the
-    structure.  With a shared scale, an all-zero pred shows as flat 0.5
-    (mid-grey) and a matching pred shows the same contrast as GT.
-    """
     x = x.detach().float()
     return (x / max(vmax, 1e-8) * 0.5 + 0.5).clamp(0.0, 1.0)
 
-
 def _grid_2d(frames: torch.Tensor, nrow: int = 4) -> torch.Tensor:
-    """Stitch (K, H, W) frames into a single (H', W') image."""
     K, H, W = frames.shape
     ncol = (K + nrow - 1) // nrow
     pad = nrow * ncol - K
@@ -54,11 +29,10 @@ def _grid_2d(frames: torch.Tensor, nrow: int = 4) -> torch.Tensor:
     g = frames.view(ncol, nrow, H, W).permute(0, 2, 1, 3)
     return g.reshape(ncol * H, nrow * W)
 
-
 def log_image_stack(
     writer: "SummaryWriter",
     tag: str,
-    stack: torch.Tensor,                # (K, H, W) or (B, K, H, W)
+    stack: torch.Tensor,
     step: int,
     nrow: int = 4,
 ):
@@ -66,7 +40,6 @@ def log_image_stack(
         stack = stack[0]
     img = _grid_2d(_nrm(stack), nrow=nrow)
     writer.add_image(tag, img, global_step=step, dataformats="HW")
-
 
 def log_stack_pair_shared_scale(
     writer: "SummaryWriter",
@@ -77,13 +50,6 @@ def log_stack_pair_shared_scale(
     step: int,
     nrow: int = 4,
 ):
-    """Log measurement vs clean GT with a *shared* intensity scale per frame.
-
-    Independent min-max normalisation makes weak aberrations invisible
-    (blurred and sharp spots both stretch to full contrast).  Sharing the
-    per-frame vmax preserves the visible difference between aberrated input
-    and ideal clean reference.
-    """
     if input_stack.dim() == 4:
         input_stack = input_stack[0]
     if clean_stack.dim() == 4:
@@ -101,11 +67,10 @@ def log_stack_pair_shared_scale(
         tag_clean, _grid_2d(cln_n, nrow=nrow), global_step=step, dataformats="HW",
     )
 
-
 def log_volume_slices(
     writer: "SummaryWriter",
     tag: str,
-    vol: torch.Tensor,                  # (Z, Y, X) or (B, Z, Y, X)
+    vol: torch.Tensor,
     step: int,
     n_slices: int | None = None,
 ):
@@ -122,29 +87,18 @@ def log_volume_slices(
     img = _grid_2d(_nrm(sl), nrow=nrow)
     writer.add_image(tag, img, global_step=step, dataformats="HW")
 
-
 def log_scalar_volume_views(
     writer: "SummaryWriter",
     tag: str,
-    vol: torch.Tensor,                  # (1, Z, Y, X), (Z, Y, X), or batched
+    vol: torch.Tensor,
     step: int,
     max_slices: int = 16,
 ):
-    """Log 3D scalar volume as montage, orthogonal slices, and MIPs.
-
-    TensorBoard does not have a native 3D volume widget. Logging just one
-    central z-slice makes a real 3D dataset look like a 2D image, so this
-    helper records complementary 2D projections:
-
-    * ``{tag}/z_montage``: up to ``max_slices`` XY slices across z.
-    * ``{tag}/orthogonal``: central XY, YZ, and XZ slices in one panel.
-    * ``{tag}/mip``: maximum-intensity projections along z, y, and x.
-    """
     v = vol.detach().float()
-    if v.dim() == 5:      # (B, C, Z, Y, X)
+    if v.dim() == 5:
         v = v[0, 0]
     elif v.dim() == 4:
-        # (C, Z, Y, X) or (B, Z, Y, X); both use first leading element.
+
         v = v[0]
     assert v.dim() == 3, f"expected 3D volume after squeeze, got {tuple(v.shape)}"
 
@@ -161,8 +115,8 @@ def log_scalar_volume_views(
 
     zc, yc, xc = Z // 2, Y // 2, X // 2
     xy = _nrm(v[zc])
-    yz = _nrm(v[:, :, xc]).transpose(0, 1)  # (Y, Z)
-    xz = _nrm(v[:, yc, :])                  # (Z, X)
+    yz = _nrm(v[:, :, xc]).transpose(0, 1)
+    xz = _nrm(v[:, yc, :])
     yz = torch.nn.functional.interpolate(
         yz[None, None], size=(Y, X), mode="bilinear", align_corners=False,
     )[0, 0]
@@ -192,27 +146,13 @@ def log_scalar_volume_views(
         dataformats="HW",
     )
 
-
 def log_volume_pred_vs_gt(
     writer: "SummaryWriter",
     tag: str,
-    pred: torch.Tensor,                 # (Z, Y, X) or (B, Z, Y, X) -- SIGNED
-    gt:   torch.Tensor,                 # same shape
+    pred: torch.Tensor,
+    gt:   torch.Tensor,
     step: int,
 ):
-    """Show ALL Z-slices of pred / GT / |pred-GT| with a SHARED dynamic range.
-
-    Layout (single greyscale image, height = 3*Y, width = Z * X):
-
-        row 1 :  pred[z=0] | pred[z=1] | ... | pred[z=Nz-1]
-        row 2 :  gt[z=0]   | gt[z=1]   | ... | gt[z=Nz-1]
-        row 3 :  |pred-gt|[z=0] | ... | |pred-gt|[z=Nz-1]
-
-    pred and gt are normalised to a shared scale based on GT's |max|, so a
-    near-zero pred looks flat mid-grey rather than amplified-noise.  This
-    is the right way to visually inspect whether the model actually
-    recovered 3D structure, not just a single mid-slice.
-    """
     if pred.dim() == 4: pred = pred[0]
     if gt.dim()   == 4: gt   = gt[0]
 
@@ -225,13 +165,12 @@ def log_volume_pred_vs_gt(
     err_n = (diff / err_max).clamp(0.0, 1.0)
 
     Nz = pred.shape[0]
-    pred_row = _grid_2d(pred_n, nrow=Nz)        # 1 row of Z slices
+    pred_row = _grid_2d(pred_n, nrow=Nz)
     gt_row   = _grid_2d(gt_n,   nrow=Nz)
     err_row  = _grid_2d(err_n,  nrow=Nz)
 
     img = torch.cat([pred_row, gt_row, err_row], dim=0)
     writer.add_image(tag, img, global_step=step, dataformats="HW")
-
 
 def log_pred_vs_gt(
     writer: "SummaryWriter",
@@ -240,9 +179,7 @@ def log_pred_vs_gt(
     gt: torch.Tensor,
     step: int,
 ):
-    """Backwards-compatible wrapper: now delegates to the volumetric viz."""
     log_volume_pred_vs_gt(writer, tag, pred, gt, step)
-
 
 def log_zernike_bar(
     writer: "SummaryWriter",
@@ -251,7 +188,6 @@ def log_zernike_bar(
     gt: torch.Tensor | None,
     step: int,
 ):
-    """Render predicted vs GT Zernike coefficients as a bar plot via matplotlib."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -276,7 +212,6 @@ def log_zernike_bar(
     writer.add_figure(tag, fig, global_step=step)
     plt.close(fig)
 
-
 def log_histograms(
     writer: "SummaryWriter",
     step: int,
@@ -286,7 +221,6 @@ def log_histograms(
         if t is None:
             continue
         writer.add_histogram(name, t.detach().float().cpu(), step)
-
 
 def log_grad_norm(
     writer: "SummaryWriter",
