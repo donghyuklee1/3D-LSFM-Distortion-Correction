@@ -175,7 +175,7 @@ Additional regularizers: axial compactness, soft Dice, spherical bead prior, bac
 
 ---
 
-## Reported results (prior 4,096-volume short run)
+## Results and Figures
 
 *Figures below are from an earlier 4,096-sample / short-epoch checkpoint. Re-generate the 8,192-sample cache, re-train, and re-evaluate with `ckpt_epoch01199.pt` for numbers aligned with the current config.*
 
